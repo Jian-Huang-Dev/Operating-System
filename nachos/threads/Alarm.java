@@ -1,6 +1,8 @@
 package nachos.threads;
 
-import nachos.machine.*;
+import java.util.LinkedList;
+
+import nachos.machine.Machine;
 
 /**
  * Uses the hardware timer to provide preemption, and to allow threads to sleep
@@ -27,8 +29,28 @@ public class Alarm {
      * that should be run.
      */
     public void timerInterrupt() {
-	KThread.currentThread().yield();
-    }
+
+		// disable the interrupt status
+		boolean intStatus = Machine.interrupt().disable();
+
+		int i;
+		// loop through to check every element in the queue
+		// to see if the time is up
+		// if so, remove the item and add it to the ready list
+    	for (i = waitQueue.size() - 1 ; i >= 0 ; i--)
+    	{
+    		if (Machine.timer().getTime() >= waitQueue.get(i).wakeTime)
+    		{
+    			waitQueue.removeFirst().thread.ready();
+    		}
+    	}
+		
+		// restore interrupt status
+		Machine.interrupt().restore(intStatus);
+
+		// current thread yields and causes context switches
+		KThread.yield();
+	}
 
     /**
      * Put the current thread to sleep for at least <i>x</i> ticks,
@@ -45,9 +67,37 @@ public class Alarm {
      * @see	nachos.machine.Timer#getTime()
      */
     public void waitUntil(long x) {
-	// for now, cheat just to get something working (busy waiting is bad)
-	long wakeTime = Machine.timer().getTime() + x;
-	while (wakeTime > Machine.timer().getTime())
-	    KThread.yield();
-    }
+		// disable interrupt status
+		boolean intStatus = Machine.interrupt().disable();
+
+		// get the advanced alarm time
+		long wakeTime = Machine.timer().getTime() + x;
+		// add thread to the waitting list
+		waitQueue.add(new Waiter(KThread.currentThread(), wakeTime));
+		// put the thread to sleep
+		KThread.sleep();
+
+		// restore interrupt status
+		Machine.interrupt().restore(intStatus);
+
+		/*
+		 * while (wakeTime > Machine.timer().getTime()) KThread.yield();
+		 */
+	}
+
+	// waiter class to store KThead and wake-time
+	protected class Waiter {
+		private KThread thread;
+		private long wakeTime;
+
+		// constructor to store KThread and wake-time parameters
+		Waiter(KThread thread, long wakeTime) {
+			this.thread = thread;
+			this.wakeTime = wakeTime;
+		}
+	}
+
+	// create a queue to sort the waiters
+	//private PriorityQueue<Waiter> waitQueue = new PriorityQueue<Waiter>();
+	private LinkedList<Waiter> waitQueue = new LinkedList<Waiter>();
 }

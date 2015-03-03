@@ -1,5 +1,7 @@
 package nachos.threads;
 
+import java.util.LinkedList;
+
 import nachos.machine.*;
 
 /**
@@ -27,6 +29,26 @@ public class Communicator {
      * @param	word	the integer to transfer.
      */
     public void speak(int word) {
+    	lock.acquire();
+    	
+    	// while the listener is listening (busy), put speaker into sleep
+    	while (isListening) {
+    		// add speaker to the speaker waitQueue
+    		// put it to sleep
+    		speakerCondition.sleep();
+    	}
+    	
+    	// else
+    	// if the listener waitQueue is not empty
+    	// wake up listener, place the listener in the ready queue
+    	listenerCondition.wake();
+    	// receiving the word
+    	this.word = word;
+    	
+    	// update the listener in listening mode (busy)
+    	isListening = true;
+    		
+		lock.release();
     }
 
     /**
@@ -36,6 +58,31 @@ public class Communicator {
      * @return	the integer transferred.
      */    
     public int listen() {
-	return 0;
+    	lock.acquire();
+
+    	// while the listener is not listening (free), put listener into sleep
+		while (!isListening) {
+			// add listener to the listener waitQueue
+			// put it to sleep
+			listenerCondition.sleep();
+		}
+		
+		// else
+		// if the speaker waitQueue is not empty
+		// wake up speaker, place the speaker in the ready queue
+		speakerCondition.wake();
+		
+		// update the listener in non-listening mode (free)
+		isListening = false;
+
+		lock.release();
+		
+		return word;
     }
+    
+    int word = 0;
+    boolean isListening = false;
+    private Lock lock = new Lock();
+    private Condition2 speakerCondition = new Condition2(lock);
+    private Condition2 listenerCondition = new Condition2(lock);
 }

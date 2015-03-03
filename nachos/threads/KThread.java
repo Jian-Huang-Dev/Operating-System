@@ -47,6 +47,11 @@ public class KThread {
 	    tcb = new TCB();
 	}	    
 	else {
+		//waitQueue
+		waitQueue = ThreadedKernel.scheduler.newThreadQueue(false);
+	    
+		
+		
 	    readyQueue = ThreadedKernel.scheduler.newThreadQueue(false);
 	    readyQueue.acquire(this);	    
 
@@ -191,7 +196,13 @@ public class KThread {
 	Lib.assertTrue(toBeDestroyed == null);
 	toBeDestroyed = currentThread;
 
-
+	// the sleeping thread should be moved back to the ready queue
+	KThread thread = waitQueue.nextThread();
+	while (thread != null) {
+		thread.ready();
+		thread = waitQueue.nextThread();
+	}
+	
 	currentThread.status = statusFinished;
 	
 	sleep();
@@ -277,6 +288,34 @@ public class KThread {
 
 	Lib.assertTrue(this != currentThread);
 
+	//objectves
+	//ensure sure that the parent thread calls join() & join() is called once.
+	//checks if thread b is a child
+	
+	//disable interrupt and return the old interupt state
+	boolean intStatus = Machine.interrupt().disable();
+	
+	
+	//checks if join method has been called
+	joinCall = true; 
+	
+	// if this thread is already finished, return immediately
+	// and if the child thread is the current thread, return immediately
+	if (status != statusFinished && this != KThread.currentThread()) {
+		// check if child thread is finish before they can join
+		waitQueue.acquire(this);
+
+		// readyQueue.waitForAccess(this);
+		waitQueue.waitForAccess(currentThread);
+
+		KThread.sleep();
+
+	}
+	joinCall = false;
+	
+	//retore interrupt status
+	Machine.interrupt().restore(intStatus);
+	
     }
 
     /**
@@ -441,7 +480,13 @@ public class KThread {
     private static int numCreated = 0;
 
     private static ThreadQueue readyQueue = null;
+    
+    //create a waitQueue
+    private static ThreadQueue waitQueue = null; 
+    private boolean joinCall = false;
+    
     private static KThread currentThread = null;
     private static KThread toBeDestroyed = null;
     private static KThread idleThread = null;
 }
+
